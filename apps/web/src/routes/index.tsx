@@ -54,7 +54,6 @@ function RouteComponent() {
   const [useBitsPerSecond, setUseBitsPerSecond] = useState(false);
   const [trackDiskUsage, setTrackDiskUsage] = useState(true);
   const [chartRangeSeconds, setChartRangeSeconds] = useState("120");
-  const [history, setHistory] = useState<SpeedPoint[]>([]);
 
   const {
     isRunning,
@@ -66,6 +65,9 @@ function RouteComponent() {
     setState,
     setMetrics,
     setCountdown,
+    history,
+    appendHistory,
+    clearHistory,
   } = useMonitorStore();
 
   useEffect(() => {
@@ -101,17 +103,14 @@ function RouteComponent() {
           getStatus(),
         ]);
         setMetrics(metrics.networkKbps ?? 0, metrics.diskMBps ?? 0);
-        setHistory((prev) => {
-          const next: SpeedPoint = {
+        appendHistory(
+          {
             time: Date.now(),
             networkBytesPerSecond: (metrics.networkKbps ?? 0) * 1024,
             diskBytesPerSecond: (metrics.diskMBps ?? 0) * 1024 * 1024,
-          };
-          const updated = [...prev, next];
-          return updated.length > MAX_CHART_POINTS
-            ? updated.slice(updated.length - MAX_CHART_POINTS)
-            : updated;
-        });
+          },
+          MAX_CHART_POINTS,
+        );
         setRunning(status.running);
         setState(status.state);
         setCountdown(status.countdownSeconds);
@@ -122,7 +121,7 @@ function RouteComponent() {
     }, 1000);
 
     return () => window.clearInterval(interval);
-  }, [setCountdown, setMetrics, setRunning, setState]);
+  }, [appendHistory, setCountdown, setMetrics, setRunning, setState]);
 
   const handleStart = async () => {
     try {
@@ -227,7 +226,7 @@ function RouteComponent() {
   };
 
   const handleClearHistory = () => {
-    setHistory([]);
+    clearHistory();
     globalInfoToast("Chart history cleared");
   };
 
@@ -291,7 +290,7 @@ function RouteComponent() {
   }, [downloaderType, trackedAppRunning]);
 
   return (
-    <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col gap-4 py-6">
+    <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col gap-4">
       <Card className="w-full">
         <CardHeader className="flex items-start justify-between gap-3 md:flex-row md:items-center">
           <div className="flex flex-col gap-1">
@@ -412,8 +411,15 @@ function RouteComponent() {
             </CardHeader>
             <CardContent>
               <div className="relative">
-                <ChartContainer config={chartConfig} className="h-64 w-full">
-                  <LineChart accessibilityLayer data={chartData}>
+                <ChartContainer
+                  config={chartConfig}
+                  className="h-64 w-full px-2"
+                >
+                  <LineChart
+                    accessibilityLayer
+                    data={chartData}
+                    margin={{ top: 4, right: 8, left: 8, bottom: 8 }}
+                  >
                     <CartesianGrid vertical={false} />
                     <XAxis
                       dataKey="time"
@@ -425,7 +431,8 @@ function RouteComponent() {
                     <YAxis
                       tickLine={false}
                       axisLine={false}
-                      width={72}
+                      width={84}
+                      tickMargin={6}
                       tickFormatter={(value) =>
                         formatShortSpeed(Number(value), useBitsPerSecond)
                       }
@@ -455,7 +462,11 @@ function RouteComponent() {
                         />
                       }
                     />
-                    <ChartLegend content={<ChartLegendContent />} />
+                    <ChartLegend
+                      content={
+                        <ChartLegendContent className="flex-wrap justify-start" />
+                      }
+                    />
                     <Line
                       type="monotone"
                       dataKey="networkBytesPerSecond"
@@ -501,12 +512,6 @@ function RouteComponent() {
 }
 
 const MAX_CHART_POINTS = 300;
-
-type SpeedPoint = {
-  time: number;
-  networkBytesPerSecond: number;
-  diskBytesPerSecond: number;
-};
 
 const chartConfig = {
   networkBytesPerSecond: {

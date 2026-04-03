@@ -47,7 +47,7 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
-  --header-height: 4rem;
+  --header-height: 2.5rem;
   --spacing-header: var(--header-height);
   --spacing-window: calc(100vh - var(--header-height));
 }
