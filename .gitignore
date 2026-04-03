@@ -13,6 +13,16 @@ build/
 out/
 .turbo/
 
+# Keep Wails app icon assets versioned
+!apps/desktop/build/
+apps/desktop/build/*
+!apps/desktop/build/appicon.png
+!apps/desktop/build/windows/
+apps/desktop/build/windows/*
+!apps/desktop/build/windows/icon.ico
+!apps/desktop/build/windows/info.json
+!apps/desktop/build/windows/wails.exe.manifest
+
 # ─────────────────────────────────────────────
 # Vite
 # ─────────────────────────────────────────────
