@@ -101,6 +101,68 @@ const mockSettings: AppSettings = {
   trackedApps: [],
 };
 
+function toBoolean(value: unknown, fallback: boolean): boolean {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true") {
+      return true;
+    }
+    if (normalized === "false") {
+      return false;
+    }
+  }
+
+  if (typeof value === "number") {
+    return value !== 0;
+  }
+
+  return fallback;
+}
+
+function normalizeSettings(
+  input: Partial<AppSettings> | AppSettings,
+): AppSettings {
+  const next = {
+    ...mockSettings,
+    ...input,
+  };
+
+  return {
+    ...next,
+    networkThresholdKbps:
+      Number(next.networkThresholdKbps) || mockSettings.networkThresholdKbps,
+    diskThresholdMBps:
+      Number(next.diskThresholdMBps) || mockSettings.diskThresholdMBps,
+    trackDiskUsage: toBoolean(next.trackDiskUsage, mockSettings.trackDiskUsage),
+    chartRangeSeconds:
+      Number(next.chartRangeSeconds) || mockSettings.chartRangeSeconds,
+    idleDurationSeconds:
+      Number(next.idleDurationSeconds) || mockSettings.idleDurationSeconds,
+    countdownDurationSeconds:
+      Number(next.countdownDurationSeconds) ||
+      mockSettings.countdownDurationSeconds,
+    action: next.action ?? mockSettings.action,
+    downloaderType: next.downloaderType ?? mockSettings.downloaderType,
+    useBitsPerSecond: toBoolean(
+      next.useBitsPerSecond,
+      mockSettings.useBitsPerSecond,
+    ),
+    sampleIntervalSeconds:
+      Number(next.sampleIntervalSeconds) || mockSettings.sampleIntervalSeconds,
+    pauseWhenTrackedAppsRunning: toBoolean(
+      next.pauseWhenTrackedAppsRunning,
+      mockSettings.pauseWhenTrackedAppsRunning,
+    ),
+    trackedApps: Array.isArray(next.trackedApps)
+      ? next.trackedApps
+      : mockSettings.trackedApps,
+  };
+}
+
 const MOCK_SETTINGS_STORAGE_KEY = "auto-shutdown:settings";
 
 function loadMockSettings(): AppSettings {
@@ -114,12 +176,7 @@ function loadMockSettings(): AppSettings {
       return mockSettings;
     }
     const parsed = JSON.parse(raw) as Partial<AppSettings>;
-    return {
-      ...mockSettings,
-      ...parsed,
-      downloaderType: parsed.downloaderType ?? mockSettings.downloaderType,
-      trackedApps: parsed.trackedApps ?? mockSettings.trackedApps,
-    };
+    return normalizeSettings(parsed);
   } catch {
     return mockSettings;
   }
@@ -177,27 +234,17 @@ export async function getMetrics(): Promise<Record<string, number>> {
 export async function getSettings(): Promise<AppSettings> {
   if (window.go) {
     const settings = await window.go.main.App.GetSettings();
-    return {
-      ...settings,
-      downloaderType: settings.downloaderType ?? DownloaderType.AUTO,
-      trackDiskUsage: settings.trackDiskUsage ?? true,
-      chartRangeSeconds: settings.chartRangeSeconds ?? 120,
-      useBitsPerSecond: settings.useBitsPerSecond ?? false,
-      trackedApps: settings.trackedApps ?? [],
-    };
+    return normalizeSettings(settings);
   }
   return mockSettingsState;
 }
 
 export async function saveSettings(settings: AppSettings): Promise<void> {
-  if (window.go) return window.go.main.App.SaveSettings(settings);
+  const normalized = normalizeSettings(settings);
 
-  mockSettingsState = {
-    ...mockSettings,
-    ...settings,
-    downloaderType: settings.downloaderType ?? mockSettings.downloaderType,
-    trackedApps: settings.trackedApps ?? mockSettings.trackedApps,
-  };
+  if (window.go) return window.go.main.App.SaveSettings(normalized);
+
+  mockSettingsState = normalized;
   persistMockSettings(mockSettingsState);
 }
 

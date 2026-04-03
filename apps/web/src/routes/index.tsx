@@ -192,6 +192,7 @@ function RouteComponent() {
   const handleTrackDiskUsageToggle = async (
     checked: boolean | "indeterminate",
   ) => {
+    const previous = trackDiskUsage;
     const trackDisk = checked === true;
     setTrackDiskUsage(trackDisk);
 
@@ -201,12 +202,15 @@ function RouteComponent() {
         ...settings,
         trackDiskUsage: trackDisk,
       });
+      const persisted = await getSettings();
+      setTrackDiskUsage(persisted.trackDiskUsage);
       globalSuccessToast(
         trackDisk
           ? "Disk usage tracking enabled"
           : "Disk usage tracking disabled",
       );
     } catch {
+      setTrackDiskUsage(previous);
       globalErrorToast("Failed to update disk tracking setting");
     }
   };

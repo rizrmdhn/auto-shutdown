@@ -91,7 +91,9 @@ function SettingsRoute() {
     setIsSaving(true);
     try {
       await saveSettings(nextSettings);
-      setSettings(nextSettings);
+      const persisted = await getSettings();
+      setSettings(persisted);
+      setTrackedAppsInput((persisted.trackedApps ?? []).join("\n"));
       globalSuccessToast("Settings saved");
     } catch {
       globalErrorToast("Failed to save settings");
@@ -189,7 +191,7 @@ function SettingsRoute() {
                 checked={settings.trackDiskUsage}
                 onCheckedChange={(checked) =>
                   setSettings((prev) =>
-                    prev ? { ...prev, trackDiskUsage: checked } : prev,
+                    prev ? { ...prev, trackDiskUsage: checked === true } : prev,
                   )
                 }
               />
@@ -326,7 +328,10 @@ function SettingsRoute() {
                 onCheckedChange={(checked) =>
                   setSettings((prev) =>
                     prev
-                      ? { ...prev, pauseWhenTrackedAppsRunning: checked }
+                      ? {
+                          ...prev,
+                          pauseWhenTrackedAppsRunning: checked === true,
+                        }
                       : prev,
                   )
                 }
@@ -347,7 +352,9 @@ function SettingsRoute() {
                 checked={settings.useBitsPerSecond}
                 onCheckedChange={(checked) =>
                   setSettings((prev) =>
-                    prev ? { ...prev, useBitsPerSecond: checked } : prev,
+                    prev
+                      ? { ...prev, useBitsPerSecond: checked === true }
+                      : prev,
                   )
                 }
               />

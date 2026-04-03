@@ -117,21 +117,23 @@ func Load() (Settings, error) {
 	if err != nil {
 		return DefaultSettings(), nil
 	}
-	var raw struct {
-		Settings
-		TrackDiskUsage *bool `json:"trackDiskUsage"`
-		ChartRange     *int  `json:"chartRangeSeconds"`
-	}
-	if err := json.Unmarshal(data, &raw); err != nil {
+	var s Settings
+	if err := json.Unmarshal(data, &s); err != nil {
 		return DefaultSettings(), err
 	}
-	s := raw.Settings
-	if raw.TrackDiskUsage == nil {
+
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return DefaultSettings(), err
+	}
+
+	if _, ok := fields["trackDiskUsage"]; !ok {
 		s.TrackDiskUsage = DefaultSettings().TrackDiskUsage
 	}
-	if raw.ChartRange == nil {
+	if _, ok := fields["chartRangeSeconds"]; !ok {
 		s.ChartRangeSeconds = DefaultSettings().ChartRangeSeconds
 	}
+
 	return normalizeSettings(s), nil
 }
 
