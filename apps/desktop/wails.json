@@ -1,0 +1,13 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "auto-shutdown",
+  "outputfilename": "auto-shutdown",
+  "frontend:install": "pnpm install",
+  "frontend:build": "pnpm --filter @auto-shutdown/web build",
+  "frontend:dev:watcher": "pnpm --filter @auto-shutdown/web dev",
+  "frontend:dev:serverUrl": "http://localhost:5173",
+  "author": {
+    "name": "Your Name",
+    "email": "your@email.com"
+  }
+}

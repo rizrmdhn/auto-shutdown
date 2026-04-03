@@ -1,0 +1,15 @@
+{
+  "name": "auto-shutdown",
+  "private": true,
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "wails": "cd apps/desktop && wails dev",
+    "wails-build": "cd apps/desktop && wails build"
+  },
+  "devDependencies": {
+    "turbo": "latest"
+  },
+  "packageManager": "pnpm@10.29.2"
+}

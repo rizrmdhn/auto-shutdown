@@ -1,0 +1,8 @@
+{
+  "name": "@auto-shutdown/config",
+  "private": true,
+  "version": "0.0.1",
+  "scripts": {
+    "lint": "echo 'ok'"
+  }
+}

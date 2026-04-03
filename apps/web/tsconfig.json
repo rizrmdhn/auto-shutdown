@@ -1,0 +1,11 @@
+{
+  "extends": "@auto-shutdown/config/tsconfig.json",
+  "compilerOptions": {
+    "paths": { "@/*": ["./src/*"] },
+    "jsx": "react-jsx",
+    "composite": true,
+    "declaration": true,
+    "declarationMap": true
+  },
+  "include": ["src"]
+}
