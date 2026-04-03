@@ -1,7 +1,7 @@
-import { Outlet, createRootRoute } from "@tanstack/react-router";
-import { ThemeProvider } from "@/components/theme-provider";
 import { Header } from "@/components/header";
+import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
+import { Outlet, createRootRoute } from "@tanstack/react-router";
 
 export const Route = createRootRoute({
   component: RootComponent,
@@ -10,7 +10,7 @@ export const Route = createRootRoute({
 function RootComponent() {
   return (
     <ThemeProvider defaultTheme="system" storageKey="theme">
-      <div className="flex h-screen flex-col">
+      <div className="flex flex-col">
         <Header />
         <main className="flex-1 overflow-y-auto p-4">
           <Outlet />

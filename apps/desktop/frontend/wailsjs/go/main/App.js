@@ -10,6 +10,18 @@ export function GetMetrics() {
   return window['go']['main']['App']['GetMetrics']();
 }
 
+export function GetSettings() {
+  return window['go']['main']['App']['GetSettings']();
+}
+
+export function GetStatus() {
+  return window['go']['main']['App']['GetStatus']();
+}
+
+export function SaveSettings(arg1) {
+  return window['go']['main']['App']['SaveSettings'](arg1);
+}
+
 export function StartMonitor() {
   return window['go']['main']['App']['StartMonitor']();
 }

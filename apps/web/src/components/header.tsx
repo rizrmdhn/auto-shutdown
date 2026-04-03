@@ -9,6 +9,7 @@ import {
   IconSettings,
   IconSun,
 } from "@tabler/icons-react";
+import { useLocation, useNavigate } from "@tanstack/react-router";
 
 const STATE_LABEL: Record<string, string> = {
   ACTIVE: "Active",
@@ -28,6 +29,8 @@ const STATE_COLOR: Record<string, string> = {
 
 export function Header() {
   const { theme, setTheme } = useTheme();
+  const location = useLocation();
+  const navigate = useNavigate();
   const state = useMonitorStore((s) => s.state);
 
   function toggleTheme() {
@@ -35,7 +38,7 @@ export function Header() {
   }
 
   return (
-    <header className="flex h-10 items-center justify-between border-b border-border px-4">
+    <header className="flex h-header items-center justify-between border-b border-border px-4">
       <div className="flex items-center gap-2">
         <IconPower className="size-4 text-muted-foreground" />
         <span className="font-heading text-sm font-semibold tracking-tight">
@@ -53,10 +56,15 @@ export function Header() {
           {STATE_LABEL[state]}
         </Badge>
 
-        <Button variant="outline" onClick={() => {}}>
-          <IconSettings data-icon="inline-start" className="size-3.5" />
-          <span className="leading-none">Settings</span>
-        </Button>
+        {location.pathname !== "/settings" && (
+          <Button
+            variant="outline"
+            onClick={() => navigate({ to: "/settings" })}
+          >
+            <IconSettings data-icon="inline-start" className="size-3.5" />
+            <span className="leading-none">Settings</span>
+          </Button>
+        )}
 
         <Button onClick={toggleTheme}>
           {theme === "dark" ? (
