@@ -15,7 +15,6 @@ import (
 	"github.com/shirou/gopsutil/v3/process"
 )
 
-// App struct — semua method di sini otomatis ter-expose ke frontend via Wails
 type App struct {
 	ctx context.Context
 
@@ -316,7 +315,6 @@ func (a *App) GetStatus() StatusDTO {
 	}
 }
 
-// StartMonitor memulai monitoring network + disk
 func (a *App) StartMonitor() {
 	a.mu.Lock()
 	if a.running {
@@ -336,7 +334,6 @@ func (a *App) StartMonitor() {
 	go a.runMonitorLoop(stopCh)
 }
 
-// StopMonitor menghentikan monitoring
 func (a *App) StopMonitor() {
 	a.mu.Lock()
 	if !a.running {
@@ -352,7 +349,6 @@ func (a *App) StopMonitor() {
 	a.mu.Unlock()
 }
 
-// CancelShutdown membatalkan countdown shutdown
 func (a *App) CancelShutdown() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -363,7 +359,6 @@ func (a *App) CancelShutdown() {
 	a.countdown = time.Time{}
 }
 
-// GetMetrics mengembalikan metrics saat ini (polling fallback)
 func (a *App) GetMetrics() map[string]float64 {
 	a.mu.RLock()
 	defer a.mu.RUnlock()

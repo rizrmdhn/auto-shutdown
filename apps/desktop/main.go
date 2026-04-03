@@ -1,11 +1,11 @@
 package main
 
 import (
-  "embed"
+	"embed"
 
-  "github.com/wailsapp/wails/v2"
-  "github.com/wailsapp/wails/v2/pkg/options"
-  "github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2"
+	"github.com/wailsapp/wails/v2/pkg/options"
+	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 )
 
 //go:embed frontend/dist
@@ -16,8 +16,8 @@ func main() {
 
   err := wails.Run(&options.App{
     Title:  "Auto Shutdown",
-    Width:  900,
-    Height: 650,
+    Width:  1280,
+    Height: 720,
     AssetServer: &assetserver.Options{
       Assets: assets,
     },

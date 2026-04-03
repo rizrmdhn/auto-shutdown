@@ -115,7 +115,7 @@ func Load() (Settings, error) {
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return DefaultSettings(), nil // file belum ada → pakai default
+		return DefaultSettings(), nil
 	}
 	var raw struct {
 		Settings
