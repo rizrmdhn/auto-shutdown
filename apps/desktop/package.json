@@ -1,7 +1,7 @@
 {
   "name": "@auto-shutdown/desktop",
   "private": true,
-  "version": "1.0.1",
+  "version": "1.0.2",
   "scripts": {
     "dev": "wails dev",
     "build": "wails build",
