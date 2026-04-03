@@ -7,13 +7,21 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  ChartContainer,
+  ChartLegend,
+  ChartLegendContent,
+  ChartTooltip,
+  ChartTooltipContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { STATE_COLOR, STATE_LABEL } from "@/lib/state";
 import {
   globalErrorToast,
@@ -33,6 +41,7 @@ import {
 } from "@/lib/wails";
 import { useMonitorStore } from "@/store/monitor";
 import { createFileRoute } from "@tanstack/react-router";
+import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
 
 export const Route = createFileRoute("/")({
   component: RouteComponent,
@@ -44,6 +53,8 @@ function RouteComponent() {
     useState<DownloaderTypeValue>("AUTO");
   const [useBitsPerSecond, setUseBitsPerSecond] = useState(false);
   const [trackDiskUsage, setTrackDiskUsage] = useState(true);
+  const [chartRangeSeconds, setChartRangeSeconds] = useState("120");
+  const [history, setHistory] = useState<SpeedPoint[]>([]);
 
   const {
     isRunning,
@@ -69,6 +80,7 @@ function RouteComponent() {
         setDownloaderType(settings.downloaderType);
         setUseBitsPerSecond(settings.useBitsPerSecond);
         setTrackDiskUsage(settings.trackDiskUsage);
+        setChartRangeSeconds(String(settings.chartRangeSeconds));
       } catch {
         globalErrorToast("Failed to load downloader profile");
       }
@@ -89,6 +101,17 @@ function RouteComponent() {
           getStatus(),
         ]);
         setMetrics(metrics.networkKbps ?? 0, metrics.diskMBps ?? 0);
+        setHistory((prev) => {
+          const next: SpeedPoint = {
+            time: Date.now(),
+            networkBytesPerSecond: (metrics.networkKbps ?? 0) * 1024,
+            diskBytesPerSecond: (metrics.diskMBps ?? 0) * 1024 * 1024,
+          };
+          const updated = [...prev, next];
+          return updated.length > MAX_CHART_POINTS
+            ? updated.slice(updated.length - MAX_CHART_POINTS)
+            : updated;
+        });
         setRunning(status.running);
         setState(status.state);
         setCountdown(status.countdownSeconds);
@@ -189,6 +212,25 @@ function RouteComponent() {
     }
   };
 
+  const handleChartRangeChange = async (nextRange: string) => {
+    setChartRangeSeconds(nextRange);
+
+    try {
+      const settings = await getSettings();
+      await saveSettings({
+        ...settings,
+        chartRangeSeconds: Number(nextRange),
+      });
+    } catch {
+      globalErrorToast("Failed to save chart range");
+    }
+  };
+
+  const handleClearHistory = () => {
+    setHistory([]);
+    globalInfoToast("Chart history cleared");
+  };
+
   const formatSpeed = (bytesPerSecond: number) => {
     const base = useBitsPerSecond ? 1000 : 1024;
     const units = useBitsPerSecond
@@ -208,6 +250,23 @@ function RouteComponent() {
 
   const networkDisplay = formatSpeed(networkKbps * 1024);
   const diskDisplay = formatSpeed(diskMBps * 1024 * 1024);
+  const selectedRangeSeconds = Number(chartRangeSeconds) || 120;
+  const showChartStoppedState = !isRunning;
+
+  const chartData = useMemo(() => {
+    if (!isRunning) {
+      return [];
+    }
+
+    const cutoff = Date.now() - selectedRangeSeconds * 1000;
+
+    return history
+      .filter((point) => point.time >= cutoff)
+      .map((point) => ({
+        ...point,
+        diskBytesPerSecond: trackDiskUsage ? point.diskBytesPerSecond : 0,
+      }));
+  }, [history, isRunning, selectedRangeSeconds, trackDiskUsage]);
 
   const statusVariant = useMemo(() => {
     if (!isRunning) {
@@ -313,6 +372,123 @@ function RouteComponent() {
             </Card>
           </div>
 
+          <Card>
+            <CardHeader>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-col gap-1">
+                  <CardDescription>
+                    Live Throughput (Last {selectedRangeSeconds}s)
+                  </CardDescription>
+                  <div className="flex items-center gap-2">
+                    <CardTitle>Download vs Disk</CardTitle>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <ToggleGroup
+                    value={[chartRangeSeconds]}
+                    onValueChange={(value) => {
+                      const nextRange = value[value.length - 1];
+                      if (nextRange) {
+                        void handleChartRangeChange(nextRange);
+                      }
+                    }}
+                    variant="outline"
+                    size="sm"
+                  >
+                    <ToggleGroupItem value="30">30s</ToggleGroupItem>
+                    <ToggleGroupItem value="120">2m</ToggleGroupItem>
+                    <ToggleGroupItem value="300">5m</ToggleGroupItem>
+                  </ToggleGroup>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleClearHistory}
+                    disabled={history.length === 0}
+                  >
+                    Clear
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="relative">
+                <ChartContainer config={chartConfig} className="h-64 w-full">
+                  <LineChart accessibilityLayer data={chartData}>
+                    <CartesianGrid vertical={false} />
+                    <XAxis
+                      dataKey="time"
+                      tickLine={false}
+                      axisLine={false}
+                      minTickGap={28}
+                      tickFormatter={formatChartTime}
+                    />
+                    <YAxis
+                      tickLine={false}
+                      axisLine={false}
+                      width={72}
+                      tickFormatter={(value) =>
+                        formatShortSpeed(Number(value), useBitsPerSecond)
+                      }
+                    />
+                    <ChartTooltip
+                      cursor={false}
+                      content={
+                        <ChartTooltipContent
+                          labelFormatter={(value) =>
+                            typeof value === "number"
+                              ? formatChartTime(value)
+                              : String(value)
+                          }
+                          formatter={(value, name) => (
+                            <div className="flex w-full items-center justify-between gap-4">
+                              <span className="text-muted-foreground">
+                                {String(name)}
+                              </span>
+                              <span className="font-mono font-medium text-foreground tabular-nums">
+                                {formatShortSpeed(
+                                  Number(value),
+                                  useBitsPerSecond,
+                                )}
+                              </span>
+                            </div>
+                          )}
+                        />
+                      }
+                    />
+                    <ChartLegend content={<ChartLegendContent />} />
+                    <Line
+                      type="monotone"
+                      dataKey="networkBytesPerSecond"
+                      stroke="var(--color-networkBytesPerSecond)"
+                      strokeWidth={2}
+                      dot={false}
+                      isAnimationActive={false}
+                    />
+                    {trackDiskUsage && (
+                      <Line
+                        type="monotone"
+                        dataKey="diskBytesPerSecond"
+                        stroke="var(--color-diskBytesPerSecond)"
+                        strokeWidth={2}
+                        dot={false}
+                        isAnimationActive={false}
+                      />
+                    )}
+                  </LineChart>
+                </ChartContainer>
+                {showChartStoppedState && (
+                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                    <Badge variant="secondary">
+                      {history.length === 0
+                        ? "Start monitor to see live throughput"
+                        : "Monitoring is stopped"}
+                    </Badge>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
           <div className="flex flex-wrap gap-2">
             <Badge variant={trackedAppRunning ? "default" : "outline"}>
               {trackedLauncherLabel}
@@ -320,37 +496,50 @@ function RouteComponent() {
           </div>
         </CardContent>
       </Card>
-
-      <Card className="w-full">
-        <CardHeader>
-          <CardTitle>Monitor Notes</CardTitle>
-          <CardDescription>
-            Tune thresholds in Settings for your launcher and download profile.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <CardDescription>When To Increase Thresholds</CardDescription>
-              <CardTitle className="text-sm">High background traffic</CardTitle>
-            </CardHeader>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardDescription>When To Lower Thresholds</CardDescription>
-              <CardTitle className="text-sm">
-                Aggressive idle detection
-              </CardTitle>
-            </CardHeader>
-          </Card>
-        </CardContent>
-        <CardFooter>
-          <CardDescription>
-            Tip: Keep launcher process names up to date in the Settings page for
-            Steam, Epic, Ubisoft Connect, and Xbox services.
-          </CardDescription>
-        </CardFooter>
-      </Card>
     </div>
   );
+}
+
+const MAX_CHART_POINTS = 300;
+
+type SpeedPoint = {
+  time: number;
+  networkBytesPerSecond: number;
+  diskBytesPerSecond: number;
+};
+
+const chartConfig = {
+  networkBytesPerSecond: {
+    label: "Download",
+    color: "var(--chart-1)",
+  },
+  diskBytesPerSecond: {
+    label: "Disk",
+    color: "var(--chart-2)",
+  },
+} satisfies ChartConfig;
+
+function formatChartTime(value: number) {
+  const date = new Date(value);
+  return date.toLocaleTimeString([], {
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
+function formatShortSpeed(bytesPerSecond: number, useBitsPerSecond: boolean) {
+  const base = useBitsPerSecond ? 1000 : 1024;
+  const units = useBitsPerSecond
+    ? ["b/s", "Kb/s", "Mb/s", "Gb/s", "Tb/s"]
+    : ["B/s", "KB/s", "MB/s", "GB/s", "TB/s"];
+
+  let value = useBitsPerSecond ? bytesPerSecond * 8 : bytesPerSecond;
+  let unitIndex = 0;
+
+  for (; unitIndex < units.length - 1 && value >= base; unitIndex++) {
+    value /= base;
+  }
+
+  const decimals = value >= 100 ? 0 : value >= 10 ? 1 : 2;
+  return `${value.toFixed(decimals)} ${units[unitIndex]}`;
 }

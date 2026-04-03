@@ -33,6 +33,7 @@ type SettingsDTO struct {
 	NetworkThresholdKbps        float64  `json:"networkThresholdKbps"`
 	DiskThresholdMBps           float64  `json:"diskThresholdMBps"`
 	TrackDiskUsage              bool     `json:"trackDiskUsage"`
+	ChartRangeSeconds           int      `json:"chartRangeSeconds"`
 	IdleDurationSeconds         int      `json:"idleDurationSeconds"`
 	CountdownDurationSeconds    int      `json:"countdownDurationSeconds"`
 	Action                      string   `json:"action"`
@@ -132,6 +133,7 @@ func toDTO(s config.Settings) SettingsDTO {
 		NetworkThresholdKbps:        s.NetworkThresholdKbps,
 		DiskThresholdMBps:           s.DiskThresholdMBps,
 		TrackDiskUsage:              s.TrackDiskUsage,
+		ChartRangeSeconds:           s.ChartRangeSeconds,
 		IdleDurationSeconds:         int(s.IdleDuration.Seconds()),
 		CountdownDurationSeconds:    int(s.CountdownDuration.Seconds()),
 		Action:                      s.Action,
@@ -148,6 +150,7 @@ func fromDTO(dto SettingsDTO) config.Settings {
 		NetworkThresholdKbps:        dto.NetworkThresholdKbps,
 		DiskThresholdMBps:           dto.DiskThresholdMBps,
 		TrackDiskUsage:              dto.TrackDiskUsage,
+		ChartRangeSeconds:           dto.ChartRangeSeconds,
 		IdleDuration:                time.Duration(dto.IdleDurationSeconds) * time.Second,
 		CountdownDuration:           time.Duration(dto.CountdownDurationSeconds) * time.Second,
 		Action:                      dto.Action,

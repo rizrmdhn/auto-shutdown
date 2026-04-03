@@ -4,6 +4,7 @@ export namespace main {
 	    networkThresholdKbps: number;
 	    diskThresholdMBps: number;
 	    trackDiskUsage: boolean;
+	    chartRangeSeconds: number;
 	    idleDurationSeconds: number;
 	    countdownDurationSeconds: number;
 	    action: string;
@@ -22,6 +23,7 @@ export namespace main {
 	        this.networkThresholdKbps = source["networkThresholdKbps"];
 	        this.diskThresholdMBps = source["diskThresholdMBps"];
 	        this.trackDiskUsage = source["trackDiskUsage"];
+	        this.chartRangeSeconds = source["chartRangeSeconds"];
 	        this.idleDurationSeconds = source["idleDurationSeconds"];
 	        this.countdownDurationSeconds = source["countdownDurationSeconds"];
 	        this.action = source["action"];

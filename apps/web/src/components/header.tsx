@@ -1,9 +1,5 @@
 import { useTheme } from "@/components/theme-provider";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { STATE_COLOR, STATE_LABEL } from "@/lib/state";
-import { cn } from "@/lib/utils";
-import { useMonitorStore } from "@/store/monitor";
 import {
   IconMoon,
   IconPower,
@@ -16,7 +12,6 @@ export function Header() {
   const { theme, setTheme } = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
-  const state = useMonitorStore((s) => s.state);
 
   function toggleTheme() {
     setTheme(theme === "dark" ? "light" : "dark");
@@ -32,15 +27,6 @@ export function Header() {
       </div>
 
       <div className="flex items-center gap-2">
-        <Badge
-          className={cn(
-            "rounded-full border-0 px-2 py-0.5 text-[0.625rem] font-medium",
-            STATE_COLOR[state],
-          )}
-        >
-          {STATE_LABEL[state]}
-        </Badge>
-
         {location.pathname !== "/settings" && (
           <Button
             variant="outline"

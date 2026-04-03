@@ -23,6 +23,7 @@ type Settings struct {
 	NetworkThresholdKbps        float64        `json:"networkThresholdKbps"`
 	DiskThresholdMBps           float64        `json:"diskThresholdMBps"`
 	TrackDiskUsage              bool           `json:"trackDiskUsage"`
+	ChartRangeSeconds           int            `json:"chartRangeSeconds"`
 	IdleDuration                time.Duration  `json:"idleDuration"`
 	CountdownDuration           time.Duration  `json:"countdownDuration"`
 	Action                      string         `json:"action"`
@@ -38,6 +39,7 @@ func DefaultSettings() Settings {
 		NetworkThresholdKbps:        50,
 		DiskThresholdMBps:           1,
 		TrackDiskUsage:              true,
+		ChartRangeSeconds:           120,
 		IdleDuration:                20 * time.Second,
 		CountdownDuration:           10 * time.Second,
 		Action:                      "shutdown",
@@ -72,6 +74,9 @@ func normalizeSettings(s Settings) Settings {
 	}
 	if s.DiskThresholdMBps <= 0 {
 		s.DiskThresholdMBps = d.DiskThresholdMBps
+	}
+	if s.ChartRangeSeconds <= 0 || !isValidChartRangeSeconds(s.ChartRangeSeconds) {
+		s.ChartRangeSeconds = d.ChartRangeSeconds
 	}
 	if s.IdleDuration <= 0 {
 		s.IdleDuration = d.IdleDuration
@@ -115,6 +120,7 @@ func Load() (Settings, error) {
 	var raw struct {
 		Settings
 		TrackDiskUsage *bool `json:"trackDiskUsage"`
+		ChartRange     *int  `json:"chartRangeSeconds"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return DefaultSettings(), err
@@ -123,7 +129,19 @@ func Load() (Settings, error) {
 	if raw.TrackDiskUsage == nil {
 		s.TrackDiskUsage = DefaultSettings().TrackDiskUsage
 	}
+	if raw.ChartRange == nil {
+		s.ChartRangeSeconds = DefaultSettings().ChartRangeSeconds
+	}
 	return normalizeSettings(s), nil
+}
+
+func isValidChartRangeSeconds(value int) bool {
+	switch value {
+	case 30, 120, 300:
+		return true
+	default:
+		return false
+	}
 }
 
 func Save(s Settings) error {

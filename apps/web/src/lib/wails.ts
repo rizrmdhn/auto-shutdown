@@ -63,6 +63,7 @@ export interface AppSettings {
   networkThresholdKbps: number;
   diskThresholdMBps: number;
   trackDiskUsage: boolean;
+  chartRangeSeconds: number;
   idleDurationSeconds: number;
   countdownDurationSeconds: number;
   action: "shutdown" | "sleep" | "hibernate";
@@ -89,6 +90,7 @@ const mockSettings: AppSettings = {
   networkThresholdKbps: 50,
   diskThresholdMBps: 1,
   trackDiskUsage: true,
+  chartRangeSeconds: 120,
   idleDurationSeconds: 20,
   countdownDurationSeconds: 10,
   action: "shutdown",
@@ -142,6 +144,7 @@ export async function getSettings(): Promise<AppSettings> {
       ...settings,
       downloaderType: settings.downloaderType ?? DownloaderType.AUTO,
       trackDiskUsage: settings.trackDiskUsage ?? true,
+      chartRangeSeconds: settings.chartRangeSeconds ?? 120,
       useBitsPerSecond: settings.useBitsPerSecond ?? false,
       trackedApps: settings.trackedApps ?? [],
     };
