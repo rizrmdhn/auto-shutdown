@@ -101,6 +101,43 @@ const mockSettings: AppSettings = {
   trackedApps: [],
 };
 
+const MOCK_SETTINGS_STORAGE_KEY = "auto-shutdown:settings";
+
+function loadMockSettings(): AppSettings {
+  if (typeof window === "undefined") {
+    return mockSettings;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(MOCK_SETTINGS_STORAGE_KEY);
+    if (!raw) {
+      return mockSettings;
+    }
+    const parsed = JSON.parse(raw) as Partial<AppSettings>;
+    return {
+      ...mockSettings,
+      ...parsed,
+      downloaderType: parsed.downloaderType ?? mockSettings.downloaderType,
+      trackedApps: parsed.trackedApps ?? mockSettings.trackedApps,
+    };
+  } catch {
+    return mockSettings;
+  }
+}
+
+function persistMockSettings(settings: AppSettings): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(
+    MOCK_SETTINGS_STORAGE_KEY,
+    JSON.stringify(settings),
+  );
+}
+
+let mockSettingsState: AppSettings = loadMockSettings();
+
 declare global {
   interface Window {
     go?: {
@@ -149,11 +186,19 @@ export async function getSettings(): Promise<AppSettings> {
       trackedApps: settings.trackedApps ?? [],
     };
   }
-  return mockSettings;
+  return mockSettingsState;
 }
 
 export async function saveSettings(settings: AppSettings): Promise<void> {
   if (window.go) return window.go.main.App.SaveSettings(settings);
+
+  mockSettingsState = {
+    ...mockSettings,
+    ...settings,
+    downloaderType: settings.downloaderType ?? mockSettings.downloaderType,
+    trackedApps: settings.trackedApps ?? mockSettings.trackedApps,
+  };
+  persistMockSettings(mockSettingsState);
 }
 
 export async function getStatus(): Promise<AppStatus> {
