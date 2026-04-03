@@ -18,13 +18,16 @@ permissions:
   contents: write
 
 jobs:
-  typecheck:
-    name: Web Type Check
+  prepare:
+    name: Prepare Release
     runs-on: ubuntu-latest
+    outputs:
+      release_tag: ${{ steps.release_tag.outputs.tag }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_ref || github.ref }}
           fetch-depth: 0
 
       - name: Setup Node.js
@@ -41,10 +44,34 @@ jobs:
       - name: Type check web app
         run: pnpm --filter @auto-shutdown/web exec tsc --noEmit
 
-  build-and-release:
-    name: Build And Release Windows Desktop
+      - name: Resolve tag name
+        id: release_tag
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "tag=${{ github.event.inputs.tag_name }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Generate changelog
+        uses: orhun/git-cliff-action@v4
+        with:
+          config: cliff.toml
+          args: --unreleased --tag "${{ steps.release_tag.outputs.tag }}" --tag-pattern "v.*" --strip header
+        env:
+          OUTPUT: RELEASE_NOTES.md
+
+      - name: Upload release notes
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: RELEASE_NOTES.md
+
+  build:
+    name: Build Windows Desktop
     runs-on: windows-latest
-    needs: typecheck
+    needs: prepare
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -74,11 +101,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Install git-cliff
-        uses: taiki-e/install-action@v2
-        with:
-          tool: git-cliff
-
       - name: Build desktop app
         run: pnpm --filter @auto-shutdown/desktop wails-build
 
@@ -88,26 +110,26 @@ jobs:
           name: auto-shutdown-windows
           path: apps/desktop/build/bin/auto-shutdown.exe
 
-      - name: Resolve tag name
-        id: release_tag
-        shell: pwsh
-        run: |
-          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
-            "tag=${{ github.event.inputs.tag_name }}" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-          } else {
-            "tag=${{ github.ref_name }}" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-          }
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [prepare, build]
+    steps:
+      - name: Download release notes
+        uses: actions/download-artifact@v4
+        with:
+          name: release-notes
 
-      - name: Generate release notes with git-cliff
-        shell: pwsh
-        run: |
-          git fetch --tags --force
-          git cliff --config cliff.toml --unreleased --tag "${{ steps.release_tag.outputs.tag }}" --output RELEASE_NOTES.md
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: auto-shutdown-windows
+          path: artifacts
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.release_tag.outputs.tag }}
+          tag_name: ${{ needs.prepare.outputs.release_tag }}
           target_commitish: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.release_ref || github.sha }}
           body_path: RELEASE_NOTES.md
-          files: apps/desktop/build/bin/auto-shutdown.exe
+          files: artifacts/auto-shutdown.exe
