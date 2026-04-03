@@ -3,7 +3,7 @@ module auto-shutdown
 go 1.22.0
 
 require (
-	auto-shutdown/internal v0.0.0
+	auto-shutdown/internal v0.0.0-00010101000000-000000000000
 	github.com/shirou/gopsutil/v3 v3.24.5
 	github.com/wailsapp/wails/v2 v2.12.0
 )

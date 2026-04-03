@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
+import { DownloaderProfileSelect } from "@/components/downloader-profile-select";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,18 +11,25 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
+import { STATE_COLOR, STATE_LABEL } from "@/lib/state";
 import {
   globalErrorToast,
   globalInfoToast,
   globalSuccessToast,
 } from "@/lib/toast";
+import { cn } from "@/lib/utils";
 import {
   cancelShutdown,
   getMetrics,
+  getSettings,
   getStatus,
+  saveSettings,
   startMonitor,
   stopMonitor,
+  type DownloaderType as DownloaderTypeValue,
 } from "@/lib/wails";
 import { useMonitorStore } from "@/store/monitor";
 import { createFileRoute } from "@tanstack/react-router";
@@ -32,6 +40,10 @@ export const Route = createFileRoute("/")({
 
 function RouteComponent() {
   const [trackedAppRunning, setTrackedAppRunning] = useState(false);
+  const [downloaderType, setDownloaderType] =
+    useState<DownloaderTypeValue>("AUTO");
+  const [useBitsPerSecond, setUseBitsPerSecond] = useState(false);
+  const [trackDiskUsage, setTrackDiskUsage] = useState(true);
 
   const {
     isRunning,
@@ -44,6 +56,30 @@ function RouteComponent() {
     setMetrics,
     setCountdown,
   } = useMonitorStore();
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadSettings = async () => {
+      try {
+        const settings = await getSettings();
+        if (!mounted) {
+          return;
+        }
+        setDownloaderType(settings.downloaderType);
+        setUseBitsPerSecond(settings.useBitsPerSecond);
+        setTrackDiskUsage(settings.trackDiskUsage);
+      } catch {
+        globalErrorToast("Failed to load downloader profile");
+      }
+    };
+
+    void loadSettings();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     const interval = window.setInterval(async () => {
@@ -100,6 +136,79 @@ function RouteComponent() {
     }
   };
 
+  const handleDownloaderTypeChange = async (nextType: DownloaderTypeValue) => {
+    setDownloaderType(nextType);
+    try {
+      const settings = await getSettings();
+      await saveSettings({
+        ...settings,
+        downloaderType: nextType,
+      });
+      setUseBitsPerSecond(settings.useBitsPerSecond);
+      globalSuccessToast("Downloader profile updated");
+    } catch {
+      globalErrorToast("Failed to update downloader profile");
+    }
+  };
+
+  const handleUseBitsToggle = async (checked: boolean | "indeterminate") => {
+    const useBits = checked === true;
+    setUseBitsPerSecond(useBits);
+
+    try {
+      const settings = await getSettings();
+      await saveSettings({
+        ...settings,
+        useBitsPerSecond: useBits,
+      });
+      globalSuccessToast(`Speed unit set to ${useBits ? "bits/s" : "bytes/s"}`);
+    } catch {
+      globalErrorToast("Failed to update speed unit");
+    }
+  };
+
+  const handleTrackDiskUsageToggle = async (
+    checked: boolean | "indeterminate",
+  ) => {
+    const trackDisk = checked === true;
+    setTrackDiskUsage(trackDisk);
+
+    try {
+      const settings = await getSettings();
+      await saveSettings({
+        ...settings,
+        trackDiskUsage: trackDisk,
+      });
+      globalSuccessToast(
+        trackDisk
+          ? "Disk usage tracking enabled"
+          : "Disk usage tracking disabled",
+      );
+    } catch {
+      globalErrorToast("Failed to update disk tracking setting");
+    }
+  };
+
+  const formatSpeed = (bytesPerSecond: number) => {
+    const base = useBitsPerSecond ? 1000 : 1024;
+    const units = useBitsPerSecond
+      ? ["b/s", "Kb/s", "Mb/s", "Gb/s", "Tb/s"]
+      : ["B/s", "KB/s", "MB/s", "GB/s", "TB/s"];
+
+    let value = useBitsPerSecond ? bytesPerSecond * 8 : bytesPerSecond;
+    let unitIndex = 0;
+
+    for (; unitIndex < units.length - 1 && value >= base; unitIndex++) {
+      value /= base;
+    }
+
+    const decimals = value >= 100 ? 0 : value >= 10 ? 1 : 2;
+    return `${value.toFixed(decimals)} ${units[unitIndex]}`;
+  };
+
+  const networkDisplay = formatSpeed(networkKbps * 1024);
+  const diskDisplay = formatSpeed(diskMBps * 1024 * 1024);
+
   const statusVariant = useMemo(() => {
     if (!isRunning) {
       return "secondary" as const;
@@ -109,6 +218,18 @@ function RouteComponent() {
     }
     return "default" as const;
   }, [isRunning, state]);
+
+  const trackedLauncherLabel = useMemo(() => {
+    if (downloaderType === "AUTO") {
+      return trackedAppRunning
+        ? "Auto mode: launcher pattern detected"
+        : "Auto mode: waiting for launcher pattern";
+    }
+
+    return trackedAppRunning
+      ? "Tracked launcher active"
+      : "No tracked launcher active";
+  }, [downloaderType, trackedAppRunning]);
 
   return (
     <div className="mx-auto flex min-h-full w-full max-w-5xl flex-col gap-4 py-6">
@@ -121,10 +242,12 @@ function RouteComponent() {
               power action when idle.
             </CardDescription>
           </div>
-          <Badge variant={statusVariant}>{isRunning ? state : "STOPPED"}</Badge>
+          <Badge variant={statusVariant} className={cn(STATE_COLOR[state])}>
+            {isRunning ? STATE_LABEL[state] : "STOPPED"}
+          </Badge>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Button onClick={handleStart} disabled={isRunning}>
               Start Monitor
             </Button>
@@ -142,6 +265,27 @@ function RouteComponent() {
             >
               Cancel Shutdown
             </Button>
+            <DownloaderProfileSelect
+              value={downloaderType}
+              onValueChange={handleDownloaderTypeChange}
+              triggerClassName="w-44"
+            />
+            <div className="flex items-center gap-2 rounded-md border border-border px-2 py-1">
+              <Checkbox
+                checked={useBitsPerSecond}
+                onCheckedChange={handleUseBitsToggle}
+                aria-label="Display speed in bits per second"
+              />
+              <Label>bits/s</Label>
+            </div>
+            <div className="flex items-center gap-2 rounded-md border border-border px-2 py-1">
+              <Checkbox
+                checked={trackDiskUsage}
+                onCheckedChange={handleTrackDiskUsageToggle}
+                aria-label="Track disk usage for idle detection"
+              />
+              <Label>track disk</Label>
+            </div>
           </div>
 
           <Separator />
@@ -150,13 +294,15 @@ function RouteComponent() {
             <Card>
               <CardHeader>
                 <CardDescription>Network Activity</CardDescription>
-                <CardTitle>{networkKbps.toFixed(2)} KB/s</CardTitle>
+                <CardTitle>{networkDisplay}</CardTitle>
               </CardHeader>
             </Card>
             <Card>
               <CardHeader>
-                <CardDescription>Disk Activity</CardDescription>
-                <CardTitle>{diskMBps.toFixed(3)} MB/s</CardTitle>
+                <CardDescription>
+                  {trackDiskUsage ? "Disk Activity" : "Disk Activity (Ignored)"}
+                </CardDescription>
+                <CardTitle>{diskDisplay}</CardTitle>
               </CardHeader>
             </Card>
             <Card>
@@ -169,9 +315,7 @@ function RouteComponent() {
 
           <div className="flex flex-wrap gap-2">
             <Badge variant={trackedAppRunning ? "default" : "outline"}>
-              {trackedAppRunning
-                ? "Tracked launcher active"
-                : "No tracked launcher active"}
+              {trackedLauncherLabel}
             </Badge>
           </div>
         </CardContent>

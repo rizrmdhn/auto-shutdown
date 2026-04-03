@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import { DownloaderProfileSelect } from "@/components/downloader-profile-select";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -27,7 +28,15 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { globalErrorToast, globalSuccessToast } from "@/lib/toast";
-import { getSettings, saveSettings, type AppSettings } from "@/lib/wails";
+import {
+  DownloaderType,
+  autoFallbackPatterns,
+  getSettings,
+  processNamesByDownloader,
+  saveSettings,
+  type AppSettings,
+  type DownloaderType as DownloaderTypeValue,
+} from "@/lib/wails";
 import { IconArrowLeft } from "@tabler/icons-react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 
@@ -51,7 +60,7 @@ function SettingsRoute() {
           return;
         }
         setSettings(data);
-        setTrackedAppsInput(data.trackedApps.join("\n"));
+        setTrackedAppsInput((data.trackedApps ?? []).join("\n"));
       } catch {
         globalErrorToast("Failed to load settings");
       }
@@ -89,6 +98,14 @@ function SettingsRoute() {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const applyRecommendedProcesses = (downloaderType: DownloaderTypeValue) => {
+    if (downloaderType === DownloaderType.AUTO) {
+      setTrackedAppsInput("");
+      return;
+    }
+    setTrackedAppsInput(processNamesByDownloader[downloaderType].join("\n"));
   };
 
   if (!settings) {
@@ -167,6 +184,24 @@ function SettingsRoute() {
               />
             </Field>
 
+            <Field orientation="horizontal">
+              <Switch
+                checked={settings.trackDiskUsage}
+                onCheckedChange={(checked) =>
+                  setSettings((prev) =>
+                    prev ? { ...prev, trackDiskUsage: checked } : prev,
+                  )
+                }
+              />
+              <div className="flex flex-col gap-0.5">
+                <FieldLabel>Track disk usage</FieldLabel>
+                <FieldDescription>
+                  Include disk activity in idle detection. Disable this to use
+                  network activity only.
+                </FieldDescription>
+              </div>
+            </Field>
+
             <Field>
               <FieldLabel htmlFor="idleDurationSeconds">
                 Idle duration (seconds)
@@ -210,6 +245,28 @@ function SettingsRoute() {
                   )
                 }
               />
+            </Field>
+
+            <Field>
+              <FieldLabel>Downloader profile</FieldLabel>
+              <DownloaderProfileSelect
+                value={settings.downloaderType}
+                onValueChange={(nextType) => {
+                  setSettings((prev) =>
+                    prev
+                      ? {
+                          ...prev,
+                          downloaderType: nextType,
+                        }
+                      : prev,
+                  );
+                  applyRecommendedProcesses(nextType);
+                }}
+              />
+              <FieldDescription>
+                Auto mode uses pattern matching:{" "}
+                {autoFallbackPatterns.join(", ")}.
+              </FieldDescription>
             </Field>
 
             <Field>
@@ -285,10 +342,39 @@ function SettingsRoute() {
               </div>
             </Field>
 
+            <Field orientation="horizontal">
+              <Switch
+                checked={settings.useBitsPerSecond}
+                onCheckedChange={(checked) =>
+                  setSettings((prev) =>
+                    prev ? { ...prev, useBitsPerSecond: checked } : prev,
+                  )
+                }
+              />
+              <div className="flex flex-col gap-0.5">
+                <FieldLabel>Display speed in bits/s</FieldLabel>
+                <FieldDescription>
+                  Toggle between byte-based units (KB/s, MB/s) and bit-based
+                  units (Kb/s, Mb/s), similar to Steam.
+                </FieldDescription>
+              </div>
+            </Field>
+
             <Field>
               <FieldLabel htmlFor="trackedApps">
                 Tracked process names
               </FieldLabel>
+              <div className="flex items-center justify-end">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() =>
+                    applyRecommendedProcesses(settings.downloaderType)
+                  }
+                >
+                  Use Recommended List
+                </Button>
+              </div>
               <Textarea
                 id="trackedApps"
                 value={trackedAppsInput}

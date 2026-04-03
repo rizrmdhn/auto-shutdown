@@ -32,9 +32,12 @@ type App struct {
 type SettingsDTO struct {
 	NetworkThresholdKbps        float64  `json:"networkThresholdKbps"`
 	DiskThresholdMBps           float64  `json:"diskThresholdMBps"`
+	TrackDiskUsage              bool     `json:"trackDiskUsage"`
 	IdleDurationSeconds         int      `json:"idleDurationSeconds"`
 	CountdownDurationSeconds    int      `json:"countdownDurationSeconds"`
 	Action                      string   `json:"action"`
+	DownloaderType              string   `json:"downloaderType"`
+	UseBitsPerSecond            bool     `json:"useBitsPerSecond"`
 	SampleIntervalSeconds       int      `json:"sampleIntervalSeconds"`
 	PauseWhenTrackedAppsRunning bool     `json:"pauseWhenTrackedAppsRunning"`
 	TrackedApps                 []string `json:"trackedApps"`
@@ -45,6 +48,54 @@ type StatusDTO struct {
 	State             string `json:"state"`
 	CountdownSeconds  int    `json:"countdownSeconds"`
 	TrackedAppRunning bool   `json:"trackedAppRunning"`
+}
+
+var processNamesByDownloader = map[config.DownloaderType][]string{
+	config.DownloaderTypeAuto: {},
+	config.DownloaderTypeSteam: {
+		"steam.exe",
+		"steamservice.exe",
+		"steamwebhelper.exe",
+	},
+	config.DownloaderTypeXbox: {
+		"gamingservices.exe",
+		"gamingservicesnet.exe",
+		"xboxpcapp.exe",
+		"xboxappservices.exe",
+		"xboxgamebar.exe",
+	},
+	config.DownloaderTypeEpic: {
+		"epicgameslauncher.exe",
+		"epiconlineservicesuserhelper.exe",
+	},
+	config.DownloaderTypeBattleNet: {
+		"battle.net.exe",
+		"agent.exe",
+		"blizzard update agent.exe",
+	},
+	config.DownloaderTypeEAApp: {
+		"eadesktop.exe",
+		"eabackgroundservice.exe",
+		"origin.exe",
+	},
+	config.DownloaderTypeUbisoftConnect: {
+		"upc.exe",
+		"ubisoftconnect.exe",
+	},
+}
+
+var autoFallbackPatterns = []string{
+	"steam",
+	"gamingservices",
+	"xbox",
+	"epic",
+	"battle.net",
+	"blizzard",
+	"agent",
+	"ea",
+	"origin",
+	"ubisoft",
+	"uplay",
 }
 
 func NewApp() *App {
@@ -72,15 +123,23 @@ func (a *App) startup(ctx context.Context) {
 }
 
 func toDTO(s config.Settings) SettingsDTO {
+	trackedApps := append([]string{}, s.TrackedApps...)
+	if trackedApps == nil {
+		trackedApps = []string{}
+	}
+
 	return SettingsDTO{
 		NetworkThresholdKbps:        s.NetworkThresholdKbps,
 		DiskThresholdMBps:           s.DiskThresholdMBps,
+		TrackDiskUsage:              s.TrackDiskUsage,
 		IdleDurationSeconds:         int(s.IdleDuration.Seconds()),
 		CountdownDurationSeconds:    int(s.CountdownDuration.Seconds()),
 		Action:                      s.Action,
+		DownloaderType:              string(s.DownloaderType),
+		UseBitsPerSecond:            s.UseBitsPerSecond,
 		SampleIntervalSeconds:       s.SampleIntervalSeconds,
 		PauseWhenTrackedAppsRunning: s.PauseWhenTrackedAppsRunning,
-		TrackedApps:                 append([]string(nil), s.TrackedApps...),
+		TrackedApps:                 trackedApps,
 	}
 }
 
@@ -88,9 +147,12 @@ func fromDTO(dto SettingsDTO) config.Settings {
 	s := config.Settings{
 		NetworkThresholdKbps:        dto.NetworkThresholdKbps,
 		DiskThresholdMBps:           dto.DiskThresholdMBps,
+		TrackDiskUsage:              dto.TrackDiskUsage,
 		IdleDuration:                time.Duration(dto.IdleDurationSeconds) * time.Second,
 		CountdownDuration:           time.Duration(dto.CountdownDurationSeconds) * time.Second,
 		Action:                      dto.Action,
+		DownloaderType:              config.DownloaderType(dto.DownloaderType),
+		UseBitsPerSecond:            dto.UseBitsPerSecond,
 		SampleIntervalSeconds:       dto.SampleIntervalSeconds,
 		PauseWhenTrackedAppsRunning: dto.PauseWhenTrackedAppsRunning,
 		TrackedApps:                 append([]string(nil), dto.TrackedApps...),
@@ -142,6 +204,82 @@ func (a *App) SaveSettings(input SettingsDTO) error {
 	return nil
 }
 
+func buildTrackedMatchers(settings config.Settings) ([]string, []string) {
+	exact := make([]string, 0, len(settings.TrackedApps)+8)
+	patterns := make([]string, 0, 8)
+
+	if base, ok := processNamesByDownloader[settings.DownloaderType]; ok {
+		exact = append(exact, base...)
+	}
+	if settings.DownloaderType == config.DownloaderTypeAuto {
+		patterns = append(patterns, autoFallbackPatterns...)
+	}
+
+	exact = append(exact, settings.TrackedApps...)
+
+	return exact, patterns
+}
+
+func matchesFallbackPattern(processName string, pattern string) bool {
+	// Short patterns like "ea" are too broad with plain contains; require prefix.
+	if len(pattern) <= 3 {
+		return strings.HasPrefix(processName, pattern)
+	}
+
+	return strings.Contains(processName, pattern)
+}
+
+func (a *App) isTrackedAppRunning(processNames []string, fallbackPatterns []string) bool {
+	if len(processNames) == 0 && len(fallbackPatterns) == 0 {
+		return false
+	}
+
+	lookup := make(map[string]struct{}, len(processNames))
+	for _, name := range processNames {
+		trimmed := strings.ToLower(strings.TrimSpace(name))
+		if trimmed == "" {
+			continue
+		}
+		lookup[trimmed] = struct{}{}
+	}
+
+	patterns := make([]string, 0, len(fallbackPatterns))
+	for _, pattern := range fallbackPatterns {
+		trimmed := strings.ToLower(strings.TrimSpace(pattern))
+		if trimmed == "" {
+			continue
+		}
+		patterns = append(patterns, trimmed)
+	}
+
+	if len(lookup) == 0 && len(patterns) == 0 {
+		return false
+	}
+
+	procs, err := process.Processes()
+	if err != nil {
+		return false
+	}
+
+	for _, p := range procs {
+		name, err := p.Name()
+		if err != nil {
+			continue
+		}
+		lower := strings.ToLower(name)
+		if _, ok := lookup[lower]; ok {
+			return true
+		}
+		for _, pattern := range patterns {
+			if matchesFallbackPattern(lower, pattern) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
 func (a *App) GetStatus() StatusDTO {
 	a.mu.RLock()
 	settings := a.settings
@@ -155,7 +293,8 @@ func (a *App) GetStatus() StatusDTO {
 
 	trackedRunning := false
 	if settings.PauseWhenTrackedAppsRunning {
-		trackedRunning = a.isTrackedAppRunning(settings.TrackedApps)
+		exact, patterns := buildTrackedMatchers(settings)
+		trackedRunning = a.isTrackedAppRunning(exact, patterns)
 	}
 
 	countdownSeconds := 0
@@ -255,43 +394,6 @@ func (a *App) runMonitorLoop(stopCh <-chan struct{}) {
 	}
 }
 
-func (a *App) isTrackedAppRunning(processNames []string) bool {
-	if len(processNames) == 0 {
-		return false
-	}
-
-	lookup := make(map[string]struct{}, len(processNames))
-	for _, name := range processNames {
-		trimmed := strings.ToLower(strings.TrimSpace(name))
-		if trimmed == "" {
-			continue
-		}
-		lookup[trimmed] = struct{}{}
-	}
-
-	if len(lookup) == 0 {
-		return false
-	}
-
-	procs, err := process.Processes()
-	if err != nil {
-		return false
-	}
-
-	for _, p := range procs {
-		name, err := p.Name()
-		if err != nil {
-			continue
-		}
-		_, ok := lookup[strings.ToLower(name)]
-		if ok {
-			return true
-		}
-	}
-
-	return false
-}
-
 func (a *App) tick() error {
 	a.mu.RLock()
 	m := a.monitor
@@ -302,19 +404,15 @@ func (a *App) tick() error {
 		return nil
 	}
 
-	if settings.PauseWhenTrackedAppsRunning && a.isTrackedAppRunning(settings.TrackedApps) {
-		a.mu.Lock()
-		if a.engine != nil {
-			a.engine.Tick(settings.NetworkThresholdKbps+1, settings.DiskThresholdMBps+1)
-		}
-		a.countdown = time.Time{}
-		a.mu.Unlock()
-		return nil
-	}
-
 	metric, err := m.Sample()
 	if err != nil {
 		return err
+	}
+
+	trackedRunning := false
+	if settings.PauseWhenTrackedAppsRunning {
+		exact, patterns := buildTrackedMatchers(settings)
+		trackedRunning = a.isTrackedAppRunning(exact, patterns)
 	}
 
 	a.mu.Lock()
@@ -324,8 +422,19 @@ func (a *App) tick() error {
 		return nil
 	}
 
+	if trackedRunning {
+		a.engine.Tick(settings.NetworkThresholdKbps+1, settings.DiskThresholdMBps+1)
+		a.countdown = time.Time{}
+		a.mu.Unlock()
+		return nil
+	}
+
 	prevState := a.engine.State
-	state := a.engine.Tick(metric.NetworkKbps, metric.DiskMBps)
+	diskMBps := metric.DiskMBps
+	if !settings.TrackDiskUsage {
+		diskMBps = 0
+	}
+	state := a.engine.Tick(metric.NetworkKbps, diskMBps)
 
 	if state == engine.StateCountdown && prevState != engine.StateCountdown {
 		a.countdown = time.Now()

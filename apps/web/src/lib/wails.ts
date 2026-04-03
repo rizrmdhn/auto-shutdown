@@ -1,12 +1,73 @@
 // Shim agar bisa develop di browser tanpa Wails runtime
 // Di dalam Wails, window.go akan tersedia secara otomatis
 
+export const DownloaderType = {
+  AUTO: "AUTO",
+  STEAM: "STEAM",
+  XBOX: "XBOX",
+  EPIC: "EPIC",
+  BATTLE_NET: "BATTLE_NET",
+  EA_APP: "EA_APP",
+  UBISOFT_CONNECT: "UBISOFT_CONNECT",
+} as const;
+
+export type DownloaderType =
+  (typeof DownloaderType)[keyof typeof DownloaderType];
+
+export const processNamesByDownloader: Record<DownloaderType, string[]> = {
+  [DownloaderType.AUTO]: [],
+  [DownloaderType.STEAM]: [
+    "steam.exe",
+    "steamservice.exe",
+    "steamwebhelper.exe",
+  ],
+  [DownloaderType.XBOX]: [
+    "gamingservices.exe",
+    "gamingservicesnet.exe",
+    "xboxpcapp.exe",
+    "xboxappservices.exe",
+    "xboxgamebar.exe",
+  ],
+  [DownloaderType.EPIC]: [
+    "epicgameslauncher.exe",
+    "epiconlineservicesuserhelper.exe",
+  ],
+  [DownloaderType.BATTLE_NET]: [
+    "battle.net.exe",
+    "agent.exe",
+    "blizzard update agent.exe",
+  ],
+  [DownloaderType.EA_APP]: [
+    "eadesktop.exe",
+    "eabackgroundservice.exe",
+    "origin.exe",
+  ],
+  [DownloaderType.UBISOFT_CONNECT]: ["upc.exe", "ubisoftconnect.exe"],
+};
+
+export const autoFallbackPatterns = [
+  "steam",
+  "gamingservices",
+  "xbox",
+  "epic",
+  "battle.net",
+  "blizzard",
+  "agent",
+  "ea",
+  "origin",
+  "ubisoft",
+  "uplay",
+];
+
 export interface AppSettings {
   networkThresholdKbps: number;
   diskThresholdMBps: number;
+  trackDiskUsage: boolean;
   idleDurationSeconds: number;
   countdownDurationSeconds: number;
   action: "shutdown" | "sleep" | "hibernate";
+  downloaderType: DownloaderType;
+  useBitsPerSecond: boolean;
   sampleIntervalSeconds: number;
   pauseWhenTrackedAppsRunning: boolean;
   trackedApps: string[];
@@ -27,19 +88,15 @@ export interface AppStatus {
 const mockSettings: AppSettings = {
   networkThresholdKbps: 50,
   diskThresholdMBps: 1,
-  idleDurationSeconds: 300,
-  countdownDurationSeconds: 60,
+  trackDiskUsage: true,
+  idleDurationSeconds: 20,
+  countdownDurationSeconds: 10,
   action: "shutdown",
+  downloaderType: DownloaderType.AUTO,
+  useBitsPerSecond: false,
   sampleIntervalSeconds: 1,
-  pauseWhenTrackedAppsRunning: true,
-  trackedApps: [
-    "steam.exe",
-    "epicgameslauncher.exe",
-    "upc.exe",
-    "ubisoftconnect.exe",
-    "xboxappservices.exe",
-    "gamingservices.exe",
-  ],
+  pauseWhenTrackedAppsRunning: false,
+  trackedApps: [],
 };
 
 declare global {
@@ -79,7 +136,16 @@ export async function getMetrics(): Promise<Record<string, number>> {
 }
 
 export async function getSettings(): Promise<AppSettings> {
-  if (window.go) return window.go.main.App.GetSettings();
+  if (window.go) {
+    const settings = await window.go.main.App.GetSettings();
+    return {
+      ...settings,
+      downloaderType: settings.downloaderType ?? DownloaderType.AUTO,
+      trackDiskUsage: settings.trackDiskUsage ?? true,
+      useBitsPerSecond: settings.useBitsPerSecond ?? false,
+      trackedApps: settings.trackedApps ?? [],
+    };
+  }
   return mockSettings;
 }
 

@@ -3,9 +3,12 @@ export namespace main {
 	export class SettingsDTO {
 	    networkThresholdKbps: number;
 	    diskThresholdMBps: number;
+	    trackDiskUsage: boolean;
 	    idleDurationSeconds: number;
 	    countdownDurationSeconds: number;
 	    action: string;
+	    downloaderType: string;
+	    useBitsPerSecond: boolean;
 	    sampleIntervalSeconds: number;
 	    pauseWhenTrackedAppsRunning: boolean;
 	    trackedApps: string[];
@@ -18,9 +21,12 @@ export namespace main {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.networkThresholdKbps = source["networkThresholdKbps"];
 	        this.diskThresholdMBps = source["diskThresholdMBps"];
+	        this.trackDiskUsage = source["trackDiskUsage"];
 	        this.idleDurationSeconds = source["idleDurationSeconds"];
 	        this.countdownDurationSeconds = source["countdownDurationSeconds"];
 	        this.action = source["action"];
+	        this.downloaderType = source["downloaderType"];
+	        this.useBitsPerSecond = source["useBitsPerSecond"];
 	        this.sampleIntervalSeconds = source["sampleIntervalSeconds"];
 	        this.pauseWhenTrackedAppsRunning = source["pauseWhenTrackedAppsRunning"];
 	        this.trackedApps = source["trackedApps"];
