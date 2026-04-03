@@ -58,7 +58,7 @@ jobs:
         uses: orhun/git-cliff-action@v4
         with:
           config: cliff.toml
-          args: --unreleased --tag "${{ steps.release_tag.outputs.tag }}" --tag-pattern "v.*" --strip header
+          args: --latest --strip header --tag-pattern "v.*"
         env:
           OUTPUT: RELEASE_NOTES.md
 
